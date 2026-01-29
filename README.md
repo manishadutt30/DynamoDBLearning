@@ -65,17 +65,13 @@ import software.amazon.awssdk.regions.Region;
 
 public class Example {
     public static void main(String[] args) {
-        // Create a DynamoDB base instance
-        DynamoDBBase dynamoDB = new DynamoDBBase(Region.US_EAST_1);
-        
-        try {
+        // Create a DynamoDB base instance with try-with-resources
+        try (DynamoDBBase dynamoDB = new DynamoDBBase(Region.US_EAST_1)) {
             // List all tables
             var tables = dynamoDB.listTables();
             System.out.println("Tables: " + tables.tableNames());
-        } finally {
-            // Always close the client
-            dynamoDB.close();
         }
+        // Client is automatically closed when leaving the try block
     }
 }
 ```

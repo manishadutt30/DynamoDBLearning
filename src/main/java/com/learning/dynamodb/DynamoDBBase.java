@@ -11,8 +11,9 @@ import java.util.Map;
 /**
  * Base class for DynamoDB operations using AWS SDK 2.
  * Provides common functionality for interacting with DynamoDB.
+ * This class implements AutoCloseable to support try-with-resources pattern.
  */
-public class DynamoDBBase {
+public class DynamoDBBase implements AutoCloseable {
     
     protected DynamoDbClient dynamoDbClient;
     protected Region region;
@@ -76,13 +77,19 @@ public class DynamoDBBase {
     
     /**
      * Creates a table with the specified name and key schema.
+     * Note: This method only supports tables with a partition key (hash key).
+     * For tables with composite keys (partition + sort key), additional methods would be needed.
      * 
      * @param tableName Name of the table to create
      * @param partitionKey Partition key attribute name
      * @param partitionKeyType Key type (S for String, N for Number, B for Binary)
      * @return CreateTableResponse
+     * @throws IllegalArgumentException if tableName or partitionKey is null or empty
      */
     public CreateTableResponse createTable(String tableName, String partitionKey, String partitionKeyType) {
+        validateNotEmpty(tableName, "tableName");
+        validateNotEmpty(partitionKey, "partitionKey");
+        validateNotEmpty(partitionKeyType, "partitionKeyType");
         CreateTableRequest request = CreateTableRequest.builder()
                 .tableName(tableName)
                 .keySchema(
@@ -137,8 +144,11 @@ public class DynamoDBBase {
      * @param tableName Name of the table
      * @param item Map of attribute names to attribute values
      * @return PutItemResponse
+     * @throws IllegalArgumentException if tableName is null or empty, or if item is null
      */
     public PutItemResponse putItem(String tableName, Map<String, AttributeValue> item) {
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(item, "item");
         PutItemRequest request = PutItemRequest.builder()
                 .tableName(tableName)
                 .item(item)
@@ -153,8 +163,11 @@ public class DynamoDBBase {
      * @param tableName Name of the table
      * @param key Map of key attribute names to attribute values
      * @return GetItemResponse
+     * @throws IllegalArgumentException if tableName is null or empty, or if key is null
      */
     public GetItemResponse getItem(String tableName, Map<String, AttributeValue> key) {
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(key, "key");
         GetItemRequest request = GetItemRequest.builder()
                 .tableName(tableName)
                 .key(key)
@@ -165,14 +178,20 @@ public class DynamoDBBase {
     
     /**
      * Updates an item in the specified table.
+     * Note: This method uses the attributeUpdates API, which is maintained for backward compatibility.
+     * For new code, consider using UpdateExpression with ExpressionAttributeValues instead.
      * 
      * @param tableName Name of the table
      * @param key Map of key attribute names to attribute values
      * @param attributeUpdates Map of attribute names to update actions
      * @return UpdateItemResponse
+     * @throws IllegalArgumentException if tableName is null or empty, or if key/attributeUpdates are null
      */
     public UpdateItemResponse updateItem(String tableName, Map<String, AttributeValue> key, 
                                         Map<String, AttributeValueUpdate> attributeUpdates) {
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(key, "key");
+        validateNotNull(attributeUpdates, "attributeUpdates");
         UpdateItemRequest request = UpdateItemRequest.builder()
                 .tableName(tableName)
                 .key(key)
@@ -188,8 +207,11 @@ public class DynamoDBBase {
      * @param tableName Name of the table
      * @param key Map of key attribute names to attribute values
      * @return DeleteItemResponse
+     * @throws IllegalArgumentException if tableName is null or empty, or if key is null
      */
     public DeleteItemResponse deleteItem(String tableName, Map<String, AttributeValue> key) {
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(key, "key");
         DeleteItemRequest request = DeleteItemRequest.builder()
                 .tableName(tableName)
                 .key(key)
@@ -200,11 +222,15 @@ public class DynamoDBBase {
     
     /**
      * Scans the entire table.
+     * Note: DynamoDB paginates scan results. This method returns only the first page.
+     * For large tables, you may need to check LastEvaluatedKey and make subsequent requests.
      * 
      * @param tableName Name of the table to scan
      * @return ScanResponse containing scan results
+     * @throws IllegalArgumentException if tableName is null or empty
      */
     public ScanResponse scan(String tableName) {
+        validateNotEmpty(tableName, "tableName");
         ScanRequest request = ScanRequest.builder()
                 .tableName(tableName)
                 .build();
@@ -218,7 +244,7 @@ public class DynamoDBBase {
      * @param value String value
      * @return AttributeValue
      */
-    protected AttributeValue createStringAttribute(String value) {
+    public AttributeValue createStringAttribute(String value) {
         return AttributeValue.builder().s(value).build();
     }
     
@@ -228,7 +254,33 @@ public class DynamoDBBase {
      * @param value Number value as string
      * @return AttributeValue
      */
-    protected AttributeValue createNumberAttribute(String value) {
+    public AttributeValue createNumberAttribute(String value) {
         return AttributeValue.builder().n(value).build();
+    }
+    
+    /**
+     * Validates that a string parameter is not null or empty.
+     * 
+     * @param value Value to validate
+     * @param paramName Parameter name for error message
+     * @throws IllegalArgumentException if value is null or empty
+     */
+    private void validateNotEmpty(String value, String paramName) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new IllegalArgumentException(paramName + " cannot be null or empty");
+        }
+    }
+    
+    /**
+     * Validates that an object parameter is not null.
+     * 
+     * @param value Value to validate
+     * @param paramName Parameter name for error message
+     * @throws IllegalArgumentException if value is null
+     */
+    private void validateNotNull(Object value, String paramName) {
+        if (value == null) {
+            throw new IllegalArgumentException(paramName + " cannot be null");
+        }
     }
 }
