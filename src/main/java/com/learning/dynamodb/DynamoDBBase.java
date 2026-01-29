@@ -79,6 +79,9 @@ public class DynamoDBBase implements AutoCloseable {
      * Closes the DynamoDB client and releases resources.
      */
     public void close() {
+        if (enhancedClient != null) {
+            // Enhanced client doesn't have a close method, but we close the underlying client
+        }
         if (dynamoDbClient != null) {
             dynamoDbClient.close();
         }
