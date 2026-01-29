@@ -1,21 +1,28 @@
 package com.learning.dynamodb;
 
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbEnhancedClient;
+import software.amazon.awssdk.enhanced.dynamodb.DynamoDbTable;
+import software.amazon.awssdk.enhanced.dynamodb.TableSchema;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Base class for DynamoDB operations using AWS SDK 2.
- * Provides common functionality for interacting with DynamoDB.
+ * Provides common functionality for interacting with DynamoDB using both
+ * low-level client (for map-based operations) and Enhanced Client (for data model operations).
  * This class implements AutoCloseable to support try-with-resources pattern.
  */
 public class DynamoDBBase implements AutoCloseable {
     
     protected DynamoDbClient dynamoDbClient;
+    protected DynamoDbEnhancedClient enhancedClient;
     protected Region region;
     
     /**
@@ -33,6 +40,9 @@ public class DynamoDBBase implements AutoCloseable {
     public DynamoDBBase(Region region) {
         this.region = region;
         this.dynamoDbClient = createDynamoDbClient();
+        this.enhancedClient = DynamoDbEnhancedClient.builder()
+                .dynamoDbClient(dynamoDbClient)
+                .build();
     }
     
     /**
@@ -54,6 +64,15 @@ public class DynamoDBBase implements AutoCloseable {
      */
     public DynamoDbClient getDynamoDbClient() {
         return dynamoDbClient;
+    }
+    
+    /**
+     * Gets the DynamoDB Enhanced Client instance.
+     * 
+     * @return DynamoDB Enhanced Client
+     */
+    public DynamoDbEnhancedClient getEnhancedClient() {
+        return enhancedClient;
     }
     
     /**
@@ -256,6 +275,120 @@ public class DynamoDBBase implements AutoCloseable {
      */
     public AttributeValue createNumberAttribute(String value) {
         return AttributeValue.builder().n(value).build();
+    }
+    
+    // ================ Enhanced Client Methods for Data Models ================
+    
+    /**
+     * Gets a DynamoDB table instance for the specified data model class.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table
+     * @return DynamoDbTable instance
+     */
+    public <T> DynamoDbTable<T> getTable(Class<T> modelClass, String tableName) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        return enhancedClient.table(tableName, TableSchema.fromBean(modelClass));
+    }
+    
+    /**
+     * Creates a table for the specified data model class.
+     * The table schema is derived from the model class annotations.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table to create
+     */
+    public <T> void createTableForModel(Class<T> modelClass, String tableName) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        DynamoDbTable<T> table = getTable(modelClass, tableName);
+        table.createTable();
+    }
+    
+    /**
+     * Saves (puts) a data model item to the table.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table
+     * @param item The item to save
+     */
+    public <T> void saveItem(Class<T> modelClass, String tableName, T item) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(item, "item");
+        DynamoDbTable<T> table = getTable(modelClass, tableName);
+        table.putItem(item);
+    }
+    
+    /**
+     * Gets a data model item by its key.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table
+     * @param keyItem An instance with only the key attributes set
+     * @return The retrieved item, or null if not found
+     */
+    public <T> T getItemByKey(Class<T> modelClass, String tableName, T keyItem) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(keyItem, "keyItem");
+        DynamoDbTable<T> table = getTable(modelClass, tableName);
+        return table.getItem(keyItem);
+    }
+    
+    /**
+     * Updates a data model item in the table.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table
+     * @param item The item to update
+     * @return The updated item
+     */
+    public <T> T updateItemModel(Class<T> modelClass, String tableName, T item) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(item, "item");
+        DynamoDbTable<T> table = getTable(modelClass, tableName);
+        return table.updateItem(item);
+    }
+    
+    /**
+     * Deletes a data model item by its key.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table
+     * @param keyItem An instance with only the key attributes set
+     * @return The deleted item
+     */
+    public <T> T deleteItemByKey(Class<T> modelClass, String tableName, T keyItem) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        validateNotNull(keyItem, "keyItem");
+        DynamoDbTable<T> table = getTable(modelClass, tableName);
+        return table.deleteItem(keyItem);
+    }
+    
+    /**
+     * Scans the entire table and returns all items as data model objects.
+     * Note: For large tables, consider using pagination.
+     * 
+     * @param <T> The type of the data model
+     * @param modelClass The class of the data model
+     * @param tableName The name of the table
+     * @return List of all items in the table
+     */
+    public <T> List<T> scanAllItems(Class<T> modelClass, String tableName) {
+        validateNotNull(modelClass, "modelClass");
+        validateNotEmpty(tableName, "tableName");
+        DynamoDbTable<T> table = getTable(modelClass, tableName);
+        return table.scan().items().stream().collect(Collectors.toList());
     }
     
     /**

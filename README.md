@@ -19,13 +19,19 @@ DynamoDBLearning/
 │   │       └── com/
 │   │           └── learning/
 │   │               └── dynamodb/
-│   │                   └── DynamoDBBase.java
+│   │                   ├── DynamoDBBase.java
+│   │                   ├── model/
+│   │                   │   └── User.java
+│   │                   └── examples/
+│   │                       └── UserExample.java
 │   └── test/
 │       └── java/
 │           └── com/
 │               └── learning/
 │                   └── dynamodb/
-│                       └── DynamoDBBaseTest.java
+│                       ├── DynamoDBBaseTest.java
+│                       └── model/
+│                           └── UserTest.java
 └── pom.xml
 ```
 
@@ -33,9 +39,19 @@ DynamoDBLearning/
 
 - **DynamoDBBase**: A base class that provides common DynamoDB operations including:
   - Table management (create, delete, describe, list)
-  - Item operations (put, get, update, delete)
-  - Scan operations
+  - Item operations using AttributeValue maps (put, get, update, delete)
+  - **Data Model Support**: Work with POJOs using DynamoDB Enhanced Client
+  - CRUD operations for data models (save, get, update, delete, scan)
   - Utility methods for creating attribute values
+
+- **Data Models**: Pre-built data model classes with DynamoDB annotations:
+  - **User**: Model with userId, firstName, lastName, age, and address fields
+  - Easy to create additional data models following the same pattern
+
+- **Examples**: Ready-to-use example code demonstrating:
+  - How to work with data models
+  - CRUD operations with POJOs
+  - Best practices for DynamoDB operations
 
 ## Dependencies
 
@@ -59,19 +75,87 @@ Note: Tests require AWS credentials to be configured and proper DynamoDB permiss
 
 ## Usage Example
 
+### Working with Data Models (Recommended)
+
+The preferred approach is to use data models (POJOs) with DynamoDB Enhanced Client:
+
+```java
+import com.learning.dynamodb.DynamoDBBase;
+import com.learning.dynamodb.model.User;
+import software.amazon.awssdk.regions.Region;
+
+public class Example {
+    public static void main(String[] args) {
+        try (DynamoDBBase dynamoDB = new DynamoDBBase(Region.US_EAST_1)) {
+            String tableName = "Users";
+            
+            // Create table for User model (only needed once)
+            // dynamoDB.createTableForModel(User.class, tableName);
+            
+            // Create and save a user
+            User user = new User("user001", "John", "Doe", 30, "123 Main St");
+            dynamoDB.saveItem(User.class, tableName, user);
+            
+            // Retrieve the user
+            User keyUser = new User();
+            keyUser.setUserId("user001");
+            User retrievedUser = dynamoDB.getItemByKey(User.class, tableName, keyUser);
+            System.out.println("Retrieved: " + retrievedUser);
+            
+            // Update the user
+            retrievedUser.setAge(31);
+            dynamoDB.updateItemModel(User.class, tableName, retrievedUser);
+            
+            // Scan all users
+            var allUsers = dynamoDB.scanAllItems(User.class, tableName);
+            System.out.println("Total users: " + allUsers.size());
+            
+            // Delete the user
+            dynamoDB.deleteItemByKey(User.class, tableName, keyUser);
+        }
+    }
+}
+```
+
+### Creating Your Own Data Models
+
+You can create additional data models by following the User model pattern:
+
+```java
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbBean;
+import software.amazon.awssdk.enhanced.dynamodb.mapper.annotations.DynamoDbPartitionKey;
+
+@DynamoDbBean
+public class YourModel {
+    private String id;
+    private String field1;
+    private String field2;
+    
+    public YourModel() {} // Required default constructor
+    
+    @DynamoDbPartitionKey
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    
+    // Add getters and setters for other fields
+}
+```
+
+### Working with AttributeValue Maps (Low-Level)
+
+For advanced use cases, you can still use the low-level client with AttributeValue maps:
+
 ```java
 import com.learning.dynamodb.DynamoDBBase;
 import software.amazon.awssdk.regions.Region;
 
 public class Example {
     public static void main(String[] args) {
-        // Create a DynamoDB base instance with try-with-resources
         try (DynamoDBBase dynamoDB = new DynamoDBBase(Region.US_EAST_1)) {
             // List all tables
             var tables = dynamoDB.listTables();
             System.out.println("Tables: " + tables.tableNames());
         }
-        // Client is automatically closed when leaving the try block
     }
 }
 ```
